@@ -69,6 +69,7 @@
     <string name="book_source_manage">Quản lý nguồn</string>
     <string name="book_source_manage_desc">Tạo/Nhập/Chỉnh sửa/Quản lý nguồn sách</string>
     <string name="setting">Cài đặt</string>
+    <string name="gsv_setting">Gsv</string>
     <string name="theme_setting">Cài đặt chủ đề</string>
     <string name="theme_setting_s">Một số cài đặt liên quan đến giao diện hoặc màu sắc</string>
     <string name="other_setting">Cài đặt khác</string>

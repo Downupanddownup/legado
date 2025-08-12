@@ -101,6 +101,10 @@ class ReadAloudDialog : BaseDialogFragment(R.layout.dialog_read_aloud) {
         llSetting.setOnClickListener {
             ReadAloudConfigDialog().show(childFragmentManager, "readAloudConfigDialog")
         }
+        // iv_gsv_setting 的点击事件
+        llGsvSetting.setOnClickListener {
+            GsvSettingDialog().show(childFragmentManager, "gsvSettingDialog")
+        }
         tvPre.setOnClickListener { ReadBook.moveToPrevChapter(upContent = true, toLast = false) }
         tvNext.setOnClickListener { ReadBook.moveToNextChapter(true) }
         ivStop.setOnClickListener {

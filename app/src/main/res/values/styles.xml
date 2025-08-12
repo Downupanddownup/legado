@@ -127,4 +127,9 @@
         <item name="android:layout_width">wrap_content</item>
     </style>
 
+    <style name="AnimBottom" parent="android:Animation">
+        <item name="android:windowEnterAnimation">@anim/dialog_enter</item>
+        <item name="android:windowExitAnimation">@anim/dialog_exit</item>
+    </style>
+
 </resources>

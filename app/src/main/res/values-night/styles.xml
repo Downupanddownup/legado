@@ -18,4 +18,10 @@
         <item name="android:layout_height">@dimen/shadow_height</item>
         <item name="android:background">@drawable/bg_shadow_bottom_night</item>
     </style>
+
+    <style name="AnimBottom" parent="android:Animation">
+        <item name="android:windowEnterAnimation">@anim/dialog_enter</item>
+        <item name="android:windowExitAnimation">@anim/dialog_exit</item>
+    </style>
+
 </resources>
