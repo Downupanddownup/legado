@@ -7,18 +7,24 @@ import android.view.ViewGroup
 import android.widget.EditText
 import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
+import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import io.legado.app.R
 import io.legado.app.base.BaseDialogFragment
 import io.legado.app.databinding.DialogGsvSettingBinding
+import io.legado.app.utils.GsvConfigManager
 import io.legado.app.utils.viewbindingdelegate.viewBinding
 import io.legado.app.utils.toastOnUi
+import kotlinx.coroutines.launch
 
 class GsvSettingDialog : BaseDialogFragment(R.layout.dialog_gsv_setting) {
 
     private val binding by viewBinding(DialogGsvSettingBinding::bind)
     private lateinit var toneListAdapter: ToneListAdapter // 列表适配器
+    
+    // URL 管理 - 从数据库获取
+    private var currentUrl = "https://example.com/api" // 默认 URL
 
     // 假设这是从 URL 获取到的二维数据
     private var toneData = mapOf(
@@ -41,8 +47,8 @@ class GsvSettingDialog : BaseDialogFragment(R.layout.dialog_gsv_setting) {
     }
 
     override fun onFragmentCreated(view: View, savedInstanceState: Bundle?) {
-        // 初始化 URL 和列表
-        updateUrlDisplay("https://example.com/api")
+        // 从数据库加载 URL
+        loadUrlFromDatabase()
         setupToneList()
 
         // 设置 URL 相关的点击事件
@@ -56,10 +62,21 @@ class GsvSettingDialog : BaseDialogFragment(R.layout.dialog_gsv_setting) {
     }
 
     /**
+     * 从数据库加载 URL
+     */
+    private fun loadUrlFromDatabase() {
+        lifecycleScope.launch {
+            currentUrl = GsvConfigManager.getGsvUrl()
+            updateUrlDisplay(currentUrl)
+        }
+    }
+
+    /**
      * 更新 URL 显示文本
      */
     private fun updateUrlDisplay(url: String) {
-        binding.tvUrlDisplay.text = "当前 URL: $url"
+        currentUrl = url
+        binding.tvUrlDisplay.text = "当前 URL: $currentUrl"
     }
 
     /**
@@ -67,7 +84,7 @@ class GsvSettingDialog : BaseDialogFragment(R.layout.dialog_gsv_setting) {
      */
     private fun showUrlModifyDialog() {
         val editText = EditText(requireContext()).apply {
-            setText(binding.tvUrlDisplay.text.toString().replace("当前 URL: ", ""))
+            setText(currentUrl)
             setHint("请输入新的 URL")
         }
         AlertDialog.Builder(requireContext())
@@ -76,10 +93,9 @@ class GsvSettingDialog : BaseDialogFragment(R.layout.dialog_gsv_setting) {
             .setPositiveButton("确定") { dialog, _ ->
                 val newUrl = editText.text.toString()
                 if (newUrl.isNotEmpty()) {
-                    updateUrlDisplay(newUrl)
-                    // TODO: 这里可以调用刷新数据的方法
+                    saveUrlToDatabase(newUrl)
                     refreshDataFromUrl()
-                    toastOnUi("URL 已修改")
+                    toastOnUi("URL 已修改并保存")
                 } else {
                     toastOnUi("URL 不能为空")
                 }
@@ -89,6 +105,16 @@ class GsvSettingDialog : BaseDialogFragment(R.layout.dialog_gsv_setting) {
                 dialog.dismiss()
             }
             .show()
+    }
+
+    /**
+     * 保存 URL 到数据库
+     */
+    private fun saveUrlToDatabase(url: String) {
+        lifecycleScope.launch {
+            GsvConfigManager.setGsvUrl(url)
+            updateUrlDisplay(url)
+        }
     }
 
     /**
