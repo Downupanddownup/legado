@@ -12,6 +12,7 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import io.legado.app.R
 import io.legado.app.base.BaseDialogFragment
+import io.legado.app.data.entities.ToneVoice
 import io.legado.app.databinding.DialogGsvSettingBinding
 import io.legado.app.utils.GsvConfigManager
 import io.legado.app.utils.viewbindingdelegate.viewBinding
@@ -26,13 +27,37 @@ class GsvSettingDialog : BaseDialogFragment(R.layout.dialog_gsv_setting) {
     // URL 管理 - 从数据库获取
     private var currentUrl = "https://example.com/api" // 默认 URL
 
-    // 假设这是从 URL 获取到的二维数据
-    private var toneData = mapOf(
-        "分类一" to listOf("音色A", "音色B", "音色C"),
-        "分类二" to listOf("音色D", "音色E"),
-        "分类三" to listOf("音色F", "音色G", "音色H", "音色I")
+    // 音色数据列表
+    private var toneVoices = listOf(
+        ToneVoice("1", "音色A", "分类一", "女声"),
+        ToneVoice("2", "音色B", "分类一", "男声"),
+        ToneVoice("3", "音色C", "分类一", "童声"),
+        ToneVoice("4", "音色D", "分类二", "女声"),
+        ToneVoice("5", "音色E", "分类二", "男声"),
+        ToneVoice("6", "音色F", "分类三", "女声"),
+        ToneVoice("7", "音色G", "分类三", "男声"),
+        ToneVoice("8", "音色H", "分类三", "童声"),
+        ToneVoice("9", "音色I", "分类三", "女声")
     )
-    private var selectedTone = "音色A" // 当前选中的音色
+    private var selectedTone: ToneVoice? = toneVoices.firstOrNull() // 当前选中的音色对象
+
+    /**
+     * 将音色对象列表转换为按role分组的Map结构
+     * @param voices 音色对象列表
+     * @return 按role分组的Map，key为role，value为该role下的音色显示文本列表
+     */
+    private fun convertToDisplayData(voices: List<ToneVoice>): Map<String, List<ToneVoice>> {
+        return voices.groupBy { it.role }
+    }
+
+    /**
+     * 根据显示文本查找对应的音色对象
+     * @param displayText 显示文本
+     * @return 对应的音色对象，如果未找到则返回null
+     */
+    private fun findToneByDisplayText(displayText: String): ToneVoice? {
+        return toneVoices.find { it.getDisplayText() == displayText }
+    }
 
     override fun onStart() {
         super.onStart()
@@ -126,12 +151,15 @@ class GsvSettingDialog : BaseDialogFragment(R.layout.dialog_gsv_setting) {
         toastOnUi("正在刷新数据...")
 
         // 模拟请求成功后更新数据
-        val newData = mapOf(
-            "新分类一" to listOf("新音色A", "新音色B"),
-            "新分类二" to listOf("新音色C")
+        val newToneVoices = listOf(
+            ToneVoice("10", "新音色A", "新分类一", "女声"),
+            ToneVoice("11", "新音色B", "新分类一", "男声"),
+            ToneVoice("12", "新音色C", "新分类二", "童声")
         )
-        toneData = newData
-        toneListAdapter.setData(newData)
+        toneVoices = newToneVoices
+        selectedTone = newToneVoices.firstOrNull()
+        val displayData = convertToDisplayData(newToneVoices)
+        toneListAdapter.setData(displayData)
         toastOnUi("数据刷新完成")
     }
 
@@ -139,11 +167,12 @@ class GsvSettingDialog : BaseDialogFragment(R.layout.dialog_gsv_setting) {
      * 设置音色列表
      */
     private fun setupToneList() {
-        // TODO: ToneListAdapter 和其 ViewHolder 需要你自己创建
-        toneListAdapter = ToneListAdapter(toneData, selectedTone) { newSelectedTone ->
+        val displayData = convertToDisplayData(toneVoices)
+        toneListAdapter = ToneListAdapter(displayData, selectedTone?.getDisplayText() ?: "") { selectedDisplayText ->
             // 点击回调，更新选中的音色
-            selectedTone = newSelectedTone
-            toastOnUi("选中了: $selectedTone")
+            val toneVoice = findToneByDisplayText(selectedDisplayText)
+            selectedTone = toneVoice
+            toastOnUi("选中了: ${toneVoice?.getDisplayText() ?: selectedDisplayText}")
         }
         binding.rvTones.apply {
             layoutManager = LinearLayoutManager(requireContext())
@@ -151,11 +180,12 @@ class GsvSettingDialog : BaseDialogFragment(R.layout.dialog_gsv_setting) {
         }
     }
 
-    // TODO: 创建 RecyclerView 的适配器和 ViewHolder
-    // 这是一个骨架，你需要根据你的具体需求来实现它
-    // ToneListAdapter.kt
+    /**
+     * 音色列表适配器
+     * 支持分类显示和音色选择
+     */
     class ToneListAdapter(
-        private var data: Map<String, List<String>>,
+        private var data: Map<String, List<ToneVoice>>,
         private var selectedTone: String,
         private val onToneSelected: (String) -> Unit
     ) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
@@ -167,16 +197,16 @@ class GsvSettingDialog : BaseDialogFragment(R.layout.dialog_gsv_setting) {
 
         private var flatList: List<Any> = createFlatList(data)
 
-        private fun createFlatList(data: Map<String, List<String>>): List<Any> {
+        private fun createFlatList(data: Map<String, List<ToneVoice>>): List<Any> {
             val list = mutableListOf<Any>()
             data.forEach { (category, tones) ->
                 list.add(category) // 添加分类
-                list.addAll(tones) // 添加音色
+                list.addAll(tones) // 添加音色对象
             }
             return list
         }
 
-        fun setData(newData: Map<String, List<String>>) {
+        fun setData(newData: Map<String, List<ToneVoice>>) {
             this.data = newData
             this.flatList = createFlatList(newData)
             notifyDataSetChanged()
@@ -201,15 +231,14 @@ class GsvSettingDialog : BaseDialogFragment(R.layout.dialog_gsv_setting) {
                 }
                 object : RecyclerView.ViewHolder(textView) {}
             } else {
-                // TODO: 创建音色的 ViewHolder
+                // 创建音色的 ViewHolder
                 val textView = TextView(parent.context).apply {
                     setPadding(32, 16, 16, 16)
                     textSize = 14f
-                    // TODO: 在这里设置选中背景
                     setOnClickListener {
-                        val tone = (it as TextView).text.toString()
-                        selectedTone = tone
-                        onToneSelected(tone)
+                        val displayText = (it as TextView).text.toString()
+                        selectedTone = displayText
+                        onToneSelected(displayText)
                         notifyDataSetChanged()
                     }
                 }
@@ -224,10 +253,11 @@ class GsvSettingDialog : BaseDialogFragment(R.layout.dialog_gsv_setting) {
                     (holder.itemView as TextView).text = item as String
                 }
                 VIEW_TYPE_TONE -> {
-                    (holder.itemView as TextView).text = item as String
-                    // TODO: 根据是否选中来设置背景或颜色
-                    if (item == selectedTone) {
-                        holder.itemView.setBackgroundResource(R.color.selected_background_color) // 你需要定义这个颜色
+                    val toneVoice = item as ToneVoice
+                    (holder.itemView as TextView).text = toneVoice.getDisplayText()
+                    // 根据是否选中来设置背景或颜色
+                    if (toneVoice.getDisplayText() == selectedTone) {
+                        holder.itemView.setBackgroundResource(android.R.color.holo_blue_light)
                     } else {
                         holder.itemView.setBackgroundResource(android.R.color.transparent)
                     }
