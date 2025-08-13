@@ -335,4 +335,6 @@
     <color name="md_black_1000">#000000</color>
     <color name="md_white_1000">#FFFFFF</color>
 
+    <color name="selected_background_color">#E0F7FA</color>
+
 </resources>
