@@ -13,6 +13,7 @@ import androidx.recyclerview.widget.RecyclerView
 import io.legado.app.R
 import io.legado.app.base.BaseDialogFragment
 import io.legado.app.data.entities.ToneVoice
+import io.legado.app.data.manager.ToneVoiceManager
 import io.legado.app.databinding.DialogGsvSettingBinding
 import io.legado.app.utils.GsvConfigManager
 import io.legado.app.utils.viewbindingdelegate.viewBinding
@@ -27,19 +28,9 @@ class GsvSettingDialog : BaseDialogFragment(R.layout.dialog_gsv_setting) {
     // URL 管理 - 从数据库获取
     private var currentUrl = "https://example.com/api" // 默认 URL
 
-    // 音色数据列表
-    private var toneVoices = listOf(
-        ToneVoice("1", "音色A", "分类一", "女声"),
-        ToneVoice("2", "音色B", "分类一", "男声"),
-        ToneVoice("3", "音色C", "分类一", "童声"),
-        ToneVoice("4", "音色D", "分类二", "女声"),
-        ToneVoice("5", "音色E", "分类二", "男声"),
-        ToneVoice("6", "音色F", "分类三", "女声"),
-        ToneVoice("7", "音色G", "分类三", "男声"),
-        ToneVoice("8", "音色H", "分类三", "童声"),
-        ToneVoice("9", "音色I", "分类三", "女声")
-    )
-    private var selectedTone: ToneVoice? = toneVoices.firstOrNull() // 当前选中的音色对象
+    // 音色数据列表 - 从数据库加载
+    private var toneVoices = emptyList<ToneVoice>()
+    private var selectedTone: ToneVoice? = null // 当前选中的音色对象
 
     /**
      * 将音色对象列表转换为按role分组的Map结构
@@ -74,7 +65,8 @@ class GsvSettingDialog : BaseDialogFragment(R.layout.dialog_gsv_setting) {
     override fun onFragmentCreated(view: View, savedInstanceState: Bundle?) {
         // 从数据库加载 URL
         loadUrlFromDatabase()
-        setupToneList()
+        // 从数据库加载音色历史数据
+        loadToneVoicesFromDatabase()
 
         // 设置 URL 相关的点击事件
         binding.btnUrlModify.setOnClickListener {
@@ -143,24 +135,63 @@ class GsvSettingDialog : BaseDialogFragment(R.layout.dialog_gsv_setting) {
     }
 
     /**
-     * 刷新数据，从 URL 获取新的音色列表
+     * 从数据库加载音色历史数据
+     */
+    private fun loadToneVoicesFromDatabase() {
+        lifecycleScope.launch {
+            val hasHistory = ToneVoiceManager.hasHistoryData()
+            if (hasHistory) {
+                // 有历史数据，从数据库加载
+                toneVoices = ToneVoiceManager.getToneVoices()
+                selectedTone = ToneVoiceManager.getSelectedTone()
+                toastOnUi("已加载历史音色数据")
+            } else {
+                // 没有历史数据，显示为空
+                toneVoices = emptyList()
+                selectedTone = null
+                toastOnUi("暂无历史数据，请点击刷新获取")
+            }
+            setupToneList()
+        }
+    }
+
+    /**
+     * 刷新数据，从 URL 获取新的音色列表（带动态生成效果）
      */
     private fun refreshDataFromUrl() {
-        // TODO: 在这里执行网络请求，从 URL 获取最新的音色数据
-        // 假设这里是一个模拟的网络请求
-        toastOnUi("正在刷新数据...")
-
-        // 模拟请求成功后更新数据
-        val newToneVoices = listOf(
-            ToneVoice("10", "新音色A", "新分类一", "女声"),
-            ToneVoice("11", "新音色B", "新分类一", "男声"),
-            ToneVoice("12", "新音色C", "新分类二", "童声")
-        )
-        toneVoices = newToneVoices
-        selectedTone = newToneVoices.firstOrNull()
-        val displayData = convertToDisplayData(newToneVoices)
-        toneListAdapter.setData(displayData)
-        toastOnUi("数据刷新完成")
+        lifecycleScope.launch {
+            try {
+                toastOnUi("正在刷新数据...")
+                
+                // 显示加载状态
+                binding.btnUrlRefresh.isEnabled = false
+                binding.btnUrlRefresh.text = "刷新中..."
+                
+                // 使用ToneVoiceManager模拟网络请求（带动态生成效果）
+                val newToneVoices = ToneVoiceManager.refreshFromNetwork()
+                
+                // 更新本地数据
+                toneVoices = newToneVoices
+                selectedTone = newToneVoices.firstOrNull()
+                
+                // 更新UI
+                val displayData = convertToDisplayData(newToneVoices)
+                if (::toneListAdapter.isInitialized) {
+                    toneListAdapter.setData(displayData)
+                } else {
+                    setupToneList()
+                }
+                
+                toastOnUi("数据刷新完成，已保存到数据库")
+                
+            } catch (e: Exception) {
+                toastOnUi("刷新失败: ${e.message}")
+            } finally {
+                // 恢复按钮状态
+                binding.btnUrlRefresh.isEnabled = true
+                binding.btnUrlRefresh.text = "刷新"
+            }
+        }
     }
 
     /**
@@ -172,6 +203,12 @@ class GsvSettingDialog : BaseDialogFragment(R.layout.dialog_gsv_setting) {
             // 点击回调，更新选中的音色
             val toneVoice = findToneByDisplayText(selectedDisplayText)
             selectedTone = toneVoice
+            
+            // 保存选中状态到数据库
+            lifecycleScope.launch {
+                ToneVoiceManager.setSelectedTone(toneVoice)
+            }
+            
             toastOnUi("选中了: ${toneVoice?.getDisplayText() ?: selectedDisplayText}")
         }
         binding.rvTones.apply {
