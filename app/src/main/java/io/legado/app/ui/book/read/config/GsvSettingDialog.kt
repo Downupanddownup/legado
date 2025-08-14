@@ -18,6 +18,7 @@ import io.legado.app.databinding.DialogGsvSettingBinding
 import io.legado.app.utils.GsvConfigManager
 import io.legado.app.utils.viewbindingdelegate.viewBinding
 import io.legado.app.utils.toastOnUi
+import io.legado.app.help.config.AppConfig
 import kotlinx.coroutines.launch
 
 class GsvSettingDialog : BaseDialogFragment(R.layout.dialog_gsv_setting) {
@@ -67,6 +68,15 @@ class GsvSettingDialog : BaseDialogFragment(R.layout.dialog_gsv_setting) {
         loadUrlFromDatabase()
         // 从数据库加载音色历史数据
         loadToneVoicesFromDatabase()
+        
+        // 初始化 GSV TTS 开关状态
+        binding.switchGsvEnable.isChecked = AppConfig.useGsvTTS
+        
+        // 设置 GSV TTS 开关事件
+        binding.switchGsvEnable.setOnCheckedChangeListener { _, isChecked ->
+            AppConfig.useGsvTTS = isChecked
+            toastOnUi(if (isChecked) "GSV TTS 已启用" else "GSV TTS 已禁用")
+        }
 
         // 设置 URL 相关的点击事件
         binding.btnUrlModify.setOnClickListener {
