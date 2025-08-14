@@ -39,6 +39,8 @@ import io.legado.app.utils.MD5Utils
 import io.legado.app.utils.printOnDebug
 import io.legado.app.utils.servicePendingIntent
 import io.legado.app.utils.toastOnUi
+import io.legado.app.constant.IntentAction
+import android.content.Intent
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers.Main
 import kotlinx.coroutines.Job
@@ -106,6 +108,16 @@ class GsvTTSReadAloudService : BaseReadAloudService(), Player.Listener {
             cache.release()
         }
         LogUtils.d(TAG, "GsvTTSReadAloudService destroyed")
+    }
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        when (intent?.action) {
+            IntentAction.clearCache -> {
+                LogUtils.d(TAG, "收到清空缓存指令")
+                clearCacheExceptCurrent()
+            }
+        }
+        return super.onStartCommand(intent, flags, startId)
     }
 
     @Synchronized
@@ -316,6 +328,49 @@ class GsvTTSReadAloudService : BaseReadAloudService(), Player.Listener {
         }
     }
 
+    /**
+     * 清空除当前正在播放的音频之外的所有缓存文件
+     * 用于音色切换时清理旧音色的缓存
+     */
+    fun clearCacheExceptCurrent() {
+        val cacheFile = File(ttsFolderPath)
+        if (!cacheFile.exists()) return
+        
+        // 获取当前正在播放的文件名
+        val currentFileName = if (nowSpeak < contentList.size) {
+            lifecycleScope.launch {
+                val currentText = if (paragraphStartPos > 0 && nowSpeak < contentList.size) {
+                    contentList[nowSpeak].substring(paragraphStartPos)
+                } else if (nowSpeak < contentList.size) {
+                    contentList[nowSpeak]
+                } else {
+                    ""
+                }
+                val fileName = md5SpeakFileName(currentText)
+                val currentFile = getSpeakFileAsMd5(fileName)
+                
+                cacheFile.listFiles()?.forEach { file ->
+                    if (file != currentFile && file.isFile) {
+                        file.delete()
+                        LogUtils.d(TAG, "清理缓存文件: ${file.name}")
+                    }
+                }
+                LogUtils.d(TAG, "音色切换缓存清理完成")
+            }
+        } else {
+            // 如果没有正在播放的内容，清空所有缓存
+            lifecycleScope.launch {
+                cacheFile.listFiles()?.forEach { file ->
+                    if (file.isFile) {
+                        file.delete()
+                        LogUtils.d(TAG, "清理缓存文件: ${file.name}")
+                    }
+                }
+                LogUtils.d(TAG, "音色切换缓存清理完成（全部清空）")
+            }
+        }
+    }
+
     override fun pauseReadAloud(abandonFocus: Boolean) {
         super.pauseReadAloud(abandonFocus)
         downloadTask?.cancel()
@@ -404,15 +459,29 @@ class GsvTTSReadAloudService : BaseReadAloudService(), Player.Listener {
 
     override fun onPlayerError(error: PlaybackException) {
         super.onPlayerError(error)
-        LogUtils.d(TAG, "播放错误: ${error.localizedMessage}")
-        playErrorNo++
-        if (playErrorNo >= 5) {
-            toastOnUi("朗读连续5次错误，已暂停")
-            AppLog.put("朗读连续5次错误\n${error.localizedMessage}", error, true)
-            pauseReadAloud(true)
-        } else {
+        val errorMsg = "播放错误: ${error.localizedMessage}"
+        LogUtils.d(TAG, errorMsg)
+        AppLog.put(errorMsg, error)
+        
+        // 检查是否是格式不支持的错误
+        val isFormatError = error.cause?.javaClass?.simpleName?.contains("UnrecognizedInputFormatException") == true
+        
+        if (isFormatError) {
+            // 格式错误，删除当前文件并跳到下一段
+            LogUtils.d(TAG, "音频格式不支持，跳过当前段落")
             deleteCurrentSpeakFile()
+            updateNextPos()
             play()
+        } else {
+            playErrorNo++
+            if (playErrorNo >= 5) {
+                toastOnUi("朗读连续5次错误，已暂停")
+                AppLog.put("朗读连续5次错误\n${error.localizedMessage}", error, true)
+                pauseReadAloud(true)
+            } else {
+                deleteCurrentSpeakFile()
+                play()
+            }
         }
     }
 

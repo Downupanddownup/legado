@@ -241,6 +241,7 @@ class GsvSettingDialog : BaseDialogFragment(R.layout.dialog_gsv_setting) {
                         toastOnUi("音色切换失败，但已保存到本地")
                     }
                 } catch (e: Exception) {
+                    AppLog.put("音色切换失败: ${e.message}", e)
                     toastOnUi("音色切换失败: ${e.message}")
                 }
             }

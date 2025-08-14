@@ -9,6 +9,13 @@ import io.legado.app.help.http.okHttpClient
 import io.legado.app.help.http.newCallStrResponse
 import io.legado.app.help.http.newCallResponse
 import io.legado.app.help.http.get
+import android.content.Intent
+import io.legado.app.constant.IntentAction
+import io.legado.app.model.ReadAloud
+import io.legado.app.service.BaseReadAloudService
+import io.legado.app.service.GsvTTSReadAloudService
+import io.legado.app.utils.startForegroundServiceCompat
+import splitties.init.appCtx
 import okhttp3.Response
 import io.legado.app.utils.GSON
 import io.legado.app.utils.GsvConfigManager
@@ -219,6 +226,12 @@ object ToneVoiceManager {
             // 检查响应内容
             val responseBody = response.body?.string() ?: ""
             if (responseBody.trim() == "ok") {
+                // 音色切换成功后，清空GsvTTSReadAloudService的缓存
+                if (AppConfig.useGsvTTS && BaseReadAloudService.isRun) {
+                    val intent = Intent(appCtx, GsvTTSReadAloudService::class.java)
+                    intent.action = IntentAction.clearCache
+                    appCtx.startForegroundServiceCompat(intent)
+                }
                 return true
             } else {
                 throw Exception("服务器返回错误: $responseBody")
