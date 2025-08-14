@@ -4,8 +4,12 @@ import io.legado.app.data.appDb
 import io.legado.app.data.entities.ToneVoice
 import io.legado.app.data.entities.ToneVoiceEntity
 import io.legado.app.data.entities.GsvApiResponse
+import io.legado.app.help.config.AppConfig
 import io.legado.app.help.http.okHttpClient
 import io.legado.app.help.http.newCallStrResponse
+import io.legado.app.help.http.newCallResponse
+import io.legado.app.help.http.get
+import okhttp3.Response
 import io.legado.app.utils.GSON
 import io.legado.app.utils.GsvConfigManager
 import kotlinx.coroutines.flow.Flow
@@ -145,28 +149,108 @@ object ToneVoiceManager {
      * @return TTS 请求的完整 URL，包含 API 端口信息
      */
     suspend fun getTtsRequestUrl(): String {
+        return "${getBaseRequestUrl()}/ras"
+    }
+
+    /**
+     * 获取用于 TTS 基础地址
+     * @return 
+     */
+    suspend fun getBaseRequestUrl(): String {
         val gsvUrl = GsvConfigManager.getGsvUrl()
         val apiPort = GsvConfigManager.getApiPort()
-        
+
         return if (apiPort.isNotBlank()) {
             // 从 GSV URL 中提取协议和主机部分
             val uri = try {
                 java.net.URI(gsvUrl)
             } catch (e: Exception) {
                 // 如果 URL 解析失败，回退到原始逻辑
-                return "$gsvUrl/ras"
+                return "$gsvUrl"
             }
-            
+
             val protocol = uri.scheme ?: "http"
-            val host = uri.host ?: return "$gsvUrl/ras"
-            
+            val host = uri.host ?: return "$gsvUrl"
+
             // 构建 TTS 服务的完整 URL：协议://主机:TTS端口/tts
-            "$protocol://$host:$apiPort/ras"
+            "$protocol://$host:$apiPort"
         } else {
-            "$gsvUrl/ras"
+            "$gsvUrl"
         }
     }
 
+    /**
+     * 切换音色 - 发起网络请求设置选中的音色
+     * @param toneVoice 要设置的音色对象
+     * @param roleName 角色名称（可选）
+     * @return 是否设置成功
+     */
+    suspend fun switchToneVoice(toneVoice: ToneVoice, roleName: String? = null): Boolean {
+        try {
+            // 获取基础请求地址
+            val baseUrl = getBaseRequestUrl()
+            if (baseUrl.isBlank()) {
+                throw Exception("TTS 服务地址未配置")
+            }
+            
+            // 构建请求URL
+            val apiUrl = "$baseUrl/set_product"
+            
+            // 构建查询参数
+            val queryMap = mutableMapOf<String, String>()
+            queryMap["product_id"] = toneVoice.id
+            if (!roleName.isNullOrBlank()) {
+                queryMap["role_name"] = roleName
+            }
+            
+            // 发起网络请求
+            val response = okHttpClient.newCallResponse {
+                get(apiUrl, queryMap)
+                // 添加请求头
+                addHeader("Connection", "close")
+                addHeader("Cache-Control", "no-cache")
+            }
+            
+            // 检查响应是否成功
+            if (!response.isSuccessful) {
+                throw Exception("切换音色失败: HTTP ${response.code} - ${response.message}")
+            }
+            
+            // 检查响应内容
+            val responseBody = response.body?.string() ?: ""
+            if (responseBody.trim() == "ok") {
+                return true
+            } else {
+                throw Exception("服务器返回错误: $responseBody")
+            }
+            
+        } catch (e: Exception) {
+            throw Exception("切换音色失败: ${e.message}")
+        }
+    }
+    
+    /**
+     * 初始化音色设置
+     * 在应用启动时调用，自动切换到数据库中已选中的音色
+     * 只有在GSV TTS功能开启时才进行初始化
+     */
+    suspend fun initializeToneVoice() {
+        try {
+            // 检查GSV TTS开关是否开启
+            if (!AppConfig.useGsvTTS) {
+                return
+            }
+            
+            val selectedTone = getSelectedTone()
+            if (selectedTone != null) {
+                switchToneVoice(selectedTone, selectedTone.role)
+            }
+        } catch (e: Exception) {
+            // 初始化失败时不影响应用启动，只记录日志
+            e.printStackTrace()
+        }
+    }
+    
     /**
      * 从网络刷新数据
      */

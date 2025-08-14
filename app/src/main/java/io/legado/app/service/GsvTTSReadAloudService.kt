@@ -201,7 +201,7 @@ class GsvTTSReadAloudService : BaseReadAloudService(), Player.Listener {
                 val formBody = FormBody.Builder()
                     .add("text", speakText)
                     .add("text_language", "zh")
-                    .add("ref_audio_path", selectedTone.id) // 使用音色ID作为参考音频路径
+//                    .add("ref_audio_path", selectedTone.id) // 使用音色ID作为参考音频路径
                     // .add("prompt_language", "zh")
                     // .add("prompt_text", "")
                     // .add("top_k", "5")

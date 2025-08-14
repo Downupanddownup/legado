@@ -227,12 +227,23 @@ class GsvSettingDialog : BaseDialogFragment(R.layout.dialog_gsv_setting) {
             // 点击回调，更新选中的音色
             selectedTone = selectedToneVoice
             
-            // 保存选中状态到数据库
+            // 保存选中状态到数据库并发起网络请求切换音色
             lifecycleScope.launch {
-                ToneVoiceManager.setSelectedTone(selectedToneVoice)
+                try {
+                    // 先保存到本地数据库
+                    ToneVoiceManager.setSelectedTone(selectedToneVoice)
+                    
+                    // 发起网络请求切换音色
+                    val success = ToneVoiceManager.switchToneVoice(selectedToneVoice, selectedToneVoice.role)
+                    if (success) {
+                        toastOnUi("音色切换成功: ${selectedToneVoice.getDisplayText()}")
+                    } else {
+                        toastOnUi("音色切换失败，但已保存到本地")
+                    }
+                } catch (e: Exception) {
+                    toastOnUi("音色切换失败: ${e.message}")
+                }
             }
-            
-            toastOnUi("选中了: ${selectedToneVoice.getDisplayText()}")
         }
         binding.rvTones.apply {
             layoutManager = LinearLayoutManager(requireContext())
