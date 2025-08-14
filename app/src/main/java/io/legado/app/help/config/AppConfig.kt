@@ -371,6 +371,12 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
             appCtx.putPrefString(PreferKey.ttsEngine, value)
         }
 
+    var useGsvTTS: Boolean
+        get() = appCtx.getPrefBoolean(PreferKey.useGsvTTS, false)
+        set(value) {
+            appCtx.putPrefBoolean(PreferKey.useGsvTTS, value)
+        }
+
     var webPort: Int
         get() = appCtx.getPrefInt(PreferKey.webPort, 1122)
         set(value) {
