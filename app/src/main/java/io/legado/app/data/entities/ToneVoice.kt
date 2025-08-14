@@ -31,6 +31,14 @@ data class ToneVoice(
     }
 
     /**
+     * 获取唯一标识
+     * @return id+role 组成的唯一标识
+     */
+    fun getUniqueKey(): String {
+        return "${id}_${role}"
+    }
+
+    /**
      * 获取完整描述
      * @return 包含所有信息的描述文本
      */
@@ -45,10 +53,10 @@ data class ToneVoice(
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
         if (other !is ToneVoice) return false
-        return id == other.id
+        return id == other.id && role == other.role
     }
 
     override fun hashCode(): Int {
-        return id.hashCode()
+        return (id + role).hashCode()
     }
 }

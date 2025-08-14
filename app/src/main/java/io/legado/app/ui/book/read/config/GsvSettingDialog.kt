@@ -54,6 +54,13 @@ class GsvSettingDialog : BaseDialogFragment(R.layout.dialog_gsv_setting) {
         return toneVoices.find { it.getDisplayText() == displayText }
     }
 
+    /**
+     * 根据唯一标识查找对应的音色对象
+     */
+    private fun findToneByUniqueKey(uniqueKey: String): ToneVoice? {
+        return toneVoices.find { it.getUniqueKey() == uniqueKey }
+    }
+
     override fun onStart() {
         super.onStart()
         // 设置弹窗位置和大小
@@ -216,17 +223,16 @@ class GsvSettingDialog : BaseDialogFragment(R.layout.dialog_gsv_setting) {
      */
     private fun setupToneList() {
         val displayData = convertToDisplayData(toneVoices)
-        toneListAdapter = ToneListAdapter(displayData, selectedTone?.getDisplayText() ?: "") { selectedDisplayText ->
+        toneListAdapter = ToneListAdapter(displayData, selectedTone?.getUniqueKey() ?: "") { selectedToneVoice ->
             // 点击回调，更新选中的音色
-            val toneVoice = findToneByDisplayText(selectedDisplayText)
-            selectedTone = toneVoice
+            selectedTone = selectedToneVoice
             
             // 保存选中状态到数据库
             lifecycleScope.launch {
-                ToneVoiceManager.setSelectedTone(toneVoice)
+                ToneVoiceManager.setSelectedTone(selectedToneVoice)
             }
             
-            toastOnUi("选中了: ${toneVoice?.getDisplayText() ?: selectedDisplayText}")
+            toastOnUi("选中了: ${selectedToneVoice.getDisplayText()}")
         }
         binding.rvTones.apply {
             layoutManager = LinearLayoutManager(requireContext())
@@ -240,8 +246,8 @@ class GsvSettingDialog : BaseDialogFragment(R.layout.dialog_gsv_setting) {
      */
     class ToneListAdapter(
         private var data: Map<String, List<ToneVoice>>,
-        private var selectedTone: String,
-        private val onToneSelected: (String) -> Unit
+        private var selectedToneKey: String,
+        private val onToneSelected: (ToneVoice) -> Unit
     ) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
 
         companion object {
@@ -266,6 +272,11 @@ class GsvSettingDialog : BaseDialogFragment(R.layout.dialog_gsv_setting) {
             notifyDataSetChanged()
         }
 
+        fun updateSelectedTone(newSelectedKey: String) {
+            selectedToneKey = newSelectedKey
+            notifyDataSetChanged()
+        }
+
         override fun getItemViewType(position: Int): Int {
             return if (flatList[position] is String && data.containsKey(flatList[position] as String)) {
                 VIEW_TYPE_CATEGORY
@@ -275,42 +286,46 @@ class GsvSettingDialog : BaseDialogFragment(R.layout.dialog_gsv_setting) {
         }
 
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
-            return if (viewType == VIEW_TYPE_CATEGORY) {
-                // TODO: 创建分类的 ViewHolder
-                val textView = TextView(parent.context).apply {
-                    setPadding(16, 16, 16, 8)
-                    textSize = 16f
-                    // 正确的设置粗体的方式
-                    setTypeface(null, android.graphics.Typeface.BOLD)
-                }
-                object : RecyclerView.ViewHolder(textView) {}
-            } else {
-                // 创建音色的 ViewHolder
-                val textView = TextView(parent.context).apply {
-                    setPadding(32, 16, 16, 16)
-                    textSize = 14f
-                    setOnClickListener {
-                        val displayText = (it as TextView).text.toString()
-                        selectedTone = displayText
-                        onToneSelected(displayText)
-                        notifyDataSetChanged()
+            return when (viewType) {
+                VIEW_TYPE_CATEGORY -> {
+                    // 创建分类的 ViewHolder
+                    val textView = TextView(parent.context).apply {
+                        setPadding(16, 24, 16, 8)
+                        textSize = 16f
+                        setTypeface(null, android.graphics.Typeface.BOLD)
                     }
+                    object : RecyclerView.ViewHolder(textView) {}
                 }
-                object : RecyclerView.ViewHolder(textView) {}
+                else -> {
+                    // 创建音色的 ViewHolder
+                    val textView = TextView(parent.context).apply {
+                        setPadding(32, 16, 16, 16)
+                        textSize = 14f
+                    }
+                    object : RecyclerView.ViewHolder(textView) {}
+                }
             }
         }
 
         override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
             val item = flatList[position]
-            when (holder.itemViewType) {
+            when (getItemViewType(position)) {
                 VIEW_TYPE_CATEGORY -> {
                     (holder.itemView as TextView).text = item as String
                 }
                 VIEW_TYPE_TONE -> {
                     val toneVoice = item as ToneVoice
                     (holder.itemView as TextView).text = toneVoice.getDisplayText()
-                    // 根据是否选中来设置背景或颜色
-                    if (toneVoice.getDisplayText() == selectedTone) {
+                    
+                    // 为每个音色项设置点击监听器，直接传递当前的 ToneVoice 对象
+                    holder.itemView.setOnClickListener {
+                        selectedToneKey = toneVoice.getUniqueKey()
+                        onToneSelected(toneVoice)
+                        notifyDataSetChanged()
+                    }
+                    
+                    // 根据是否选中来设置背景或颜色（使用 uniqueKey 进行比较）
+                    if (toneVoice.getUniqueKey() == selectedToneKey) {
                         holder.itemView.setBackgroundResource(android.R.color.holo_blue_light)
                     } else {
                         holder.itemView.setBackgroundResource(android.R.color.transparent)
