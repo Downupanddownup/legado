@@ -26,6 +26,7 @@ object ReadAloud {
     var httpTTS: HttpTTS? = null
 
     private fun getReadAloudClass(): Class<*> {
+        AppConfig.useGsvTTS = false
         // GSV TTS 开关控制
         val useGsvTTS = AppConfig.useGsvTTS
         if (useGsvTTS) {

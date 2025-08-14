@@ -3,6 +3,11 @@ package io.legado.app.data.manager
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.ToneVoice
 import io.legado.app.data.entities.ToneVoiceEntity
+import io.legado.app.data.entities.GsvApiResponse
+import io.legado.app.help.http.okHttpClient
+import io.legado.app.help.http.newCallStrResponse
+import io.legado.app.utils.GSON
+import io.legado.app.utils.GsvConfigManager
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlin.random.Random
@@ -136,17 +141,86 @@ object ToneVoiceManager {
     }
     
     /**
-     * 模拟网络刷新数据
+     * 从网络刷新数据
      */
     suspend fun refreshFromNetwork(): List<ToneVoice> {
-        // 模拟网络延迟
-        kotlinx.coroutines.delay(Random.nextLong(500, 1500))
-        
-        val newToneVoices = generateMockToneVoices()
-        
-        // 保存到数据库
-        saveToneVoices(newToneVoices, newToneVoices.firstOrNull())
-        
-        return newToneVoices
+        try {
+            // 获取配置的 URL
+            val baseUrl = GsvConfigManager.getGsvUrl()
+            if (baseUrl.isNullOrBlank()) {
+                throw Exception("GSV URL 未配置")
+            }
+            
+            val apiUrl = "$baseUrl/product/get_all_databases_finished_product_list"
+            
+            // 发起网络请求，增加重试次数
+            val response = okHttpClient.newCallStrResponse(retry = 2) {
+                url(apiUrl)
+                get()
+                // 添加超时相关的请求头
+                addHeader("Connection", "close") // 避免连接复用问题
+                addHeader("Cache-Control", "no-cache")
+            }
+            
+            // 检查响应是否成功
+            if (!response.isSuccessful()) {
+                throw Exception("网络请求失败: HTTP ${response.code()} - ${response.message()}")
+            }
+            
+            // 解析 JSON 响应，增加更详细的错误处理
+            val responseBody = response.body
+            if (responseBody.isNullOrBlank()) {
+                throw Exception("服务器返回空响应")
+            }
+            
+            val apiResponse = try {
+                GSON.fromJson(responseBody, GsvApiResponse::class.java)
+            } catch (e: Exception) {
+                throw Exception("JSON 解析失败: ${e.message}，响应内容: ${responseBody.take(200)}")
+            }
+            
+            if (apiResponse == null) {
+                throw Exception("响应数据解析为 null，响应内容: ${responseBody.take(200)}")
+            }
+            
+            // 检查 API 响应状态
+            if (apiResponse.code != 0) {
+                throw Exception("API 返回错误: ${apiResponse.msg} (code: ${apiResponse.code})")
+            }
+            
+            // 检查数据完整性
+            if (apiResponse.data == null) {
+                throw Exception("API 返回的 data 字段为 null")
+            }
+            
+            if (apiResponse.data.productList == null) {
+                throw Exception("API 返回的 productList 字段为 null")
+            }
+            
+            // 转换为 ToneVoice 列表
+            val newToneVoices = apiResponse.data.productList.mapNotNull { product ->
+                try {
+                    product.toToneVoice()
+                } catch (e: Exception) {
+                    // 记录转换失败的产品，但不中断整个流程
+                    null
+                }
+            }
+            
+            if (newToneVoices.isEmpty()) {
+                throw Exception("没有有效的音色数据")
+            }
+            
+            // 保存到数据库
+            saveToneVoices(newToneVoices, newToneVoices.firstOrNull())
+            
+            return newToneVoices
+            
+        } catch (e: Exception) {
+            // 网络请求失败时，返回模拟数据作为备用
+            val mockToneVoices = generateMockToneVoices()
+            saveToneVoices(mockToneVoices, mockToneVoices.firstOrNull())
+            throw e // 重新抛出异常，让调用方知道网络请求失败了
+        }
     }
 }

@@ -19,7 +19,10 @@ import io.legado.app.utils.GsvConfigManager
 import io.legado.app.utils.viewbindingdelegate.viewBinding
 import io.legado.app.utils.toastOnUi
 import io.legado.app.help.config.AppConfig
+import io.legado.app.constant.AppLog
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 class GsvSettingDialog : BaseDialogFragment(R.layout.dialog_gsv_setting) {
 
@@ -178,7 +181,9 @@ class GsvSettingDialog : BaseDialogFragment(R.layout.dialog_gsv_setting) {
                 binding.btnUrlRefresh.text = "刷新中..."
                 
                 // 使用ToneVoiceManager模拟网络请求（带动态生成效果）
-                val newToneVoices = ToneVoiceManager.refreshFromNetwork()
+                val newToneVoices = withContext(Dispatchers.IO) {
+                    ToneVoiceManager.refreshFromNetwork()
+                }
                 
                 // 更新本地数据
                 toneVoices = newToneVoices
@@ -195,7 +200,9 @@ class GsvSettingDialog : BaseDialogFragment(R.layout.dialog_gsv_setting) {
                 toastOnUi("数据刷新完成，已保存到数据库")
                 
             } catch (e: Exception) {
-                toastOnUi("刷新失败: ${e.message}")
+                val errorMsg = "刷新失败: ${e.message}"
+                AppLog.put("GsvSettingDialog refreshDataFromUrl 异常", e)
+                toastOnUi(errorMsg)
             } finally {
                 // 恢复按钮状态
                 binding.btnUrlRefresh.isEnabled = true
