@@ -141,6 +141,33 @@ object ToneVoiceManager {
     }
     
     /**
+     * 获取用于 TTS 请求的完整 URL
+     * @return TTS 请求的完整 URL，包含 API 端口信息
+     */
+    suspend fun getTtsRequestUrl(): String {
+        val gsvUrl = GsvConfigManager.getGsvUrl()
+        val apiPort = GsvConfigManager.getApiPort()
+        
+        return if (apiPort.isNotBlank()) {
+            // 从 GSV URL 中提取协议和主机部分
+            val uri = try {
+                java.net.URI(gsvUrl)
+            } catch (e: Exception) {
+                // 如果 URL 解析失败，回退到原始逻辑
+                return "$gsvUrl/ras"
+            }
+            
+            val protocol = uri.scheme ?: "http"
+            val host = uri.host ?: return "$gsvUrl/ras"
+            
+            // 构建 TTS 服务的完整 URL：协议://主机:TTS端口/tts
+            "$protocol://$host:$apiPort/ras"
+        } else {
+            "$gsvUrl/ras"
+        }
+    }
+
+    /**
      * 从网络刷新数据
      */
     suspend fun refreshFromNetwork(): List<ToneVoice> {
@@ -196,6 +223,10 @@ object ToneVoiceManager {
             if (apiResponse.data.productList == null) {
                 throw Exception("API 返回的 productList 字段为 null")
             }
+            
+            // 保存 API 端口信息到配置中
+            val apiPort = apiResponse.data.apiPort?.toString() ?: ""
+            GsvConfigManager.setApiPort(apiPort)
             
             // 转换为 ToneVoice 列表
             val newToneVoices = apiResponse.data.productList.mapNotNull { product ->

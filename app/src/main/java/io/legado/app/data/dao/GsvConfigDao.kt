@@ -22,6 +22,12 @@ interface GsvConfigDao {
     @Query("UPDATE gsv_config SET url = :url WHERE id = 1")
     suspend fun updateUrl(url: String)
 
+    @Query("UPDATE gsv_config SET apiPort = :apiPort WHERE id = 1")
+    suspend fun updateApiPort(apiPort: String)
+
+    @Query("UPDATE gsv_config SET url = :url, apiPort = :apiPort WHERE id = 1")
+    suspend fun updateConfig(url: String, apiPort: String)
+
     @Query("DELETE FROM gsv_config")
     suspend fun deleteAll()
 }
