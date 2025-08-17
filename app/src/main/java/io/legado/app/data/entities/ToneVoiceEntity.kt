@@ -16,7 +16,7 @@ data class ToneVoiceEntity(
     @PrimaryKey
     val id: Int = 1, // 固定ID，单例存储
     val toneVoices: List<ToneVoice> = emptyList(), // 音色列表
-    val selectedToneId: String? = null, // 当前选中的音色ID
+    val selectedToneId: String? = null, // 当前选中的音色UniqueKey（格式：id_role）
     val lastUpdateTime: Long = System.currentTimeMillis() // 最后更新时间
 ) {
     
@@ -54,8 +54,8 @@ data class ToneVoiceEntity(
      * 获取选中的音色对象
      */
     fun getSelectedTone(): ToneVoice? {
-        return selectedToneId?.let { id ->
-            toneVoices.find { it.id == id }
+        return selectedToneId?.let { uniqueKey ->
+            toneVoices.find { it.getUniqueKey() == uniqueKey }
         }
     }
     
@@ -63,7 +63,7 @@ data class ToneVoiceEntity(
      * 更新选中的音色
      */
     fun updateSelectedTone(toneVoice: ToneVoice?): ToneVoiceEntity {
-        return copy(selectedToneId = toneVoice?.id)
+        return copy(selectedToneId = toneVoice?.getUniqueKey())
     }
     
     /**

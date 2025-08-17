@@ -76,6 +76,21 @@ class GsvSettingDialog : BaseDialogFragment(R.layout.dialog_gsv_setting) {
             setDimAmount(0.5f)
         }
     }
+    
+    override fun onResume() {
+        super.onResume()
+        // 每次对话框显示时重新加载选中状态
+        lifecycleScope.launch {
+            selectedTone = ToneVoiceManager.getSelectedTone()
+            AppLog.put("GsvSettingDialog onResume: 当前选中音色 = ${selectedTone?.getDisplayText() ?: "无"}")
+            // 如果适配器已初始化且有数据，强制更新选中状态
+            if (::toneListAdapter.isInitialized && toneVoices.isNotEmpty()) {
+                val selectedKey = selectedTone?.getUniqueKey() ?: ""  // 使用getUniqueKey()因为id可能重复
+                AppLog.put("GsvSettingDialog onResume: 更新适配器选中状态，Key = $selectedKey")
+                toneListAdapter.updateSelectedTone(selectedKey)
+            }
+        }
+    }
 
     override fun onFragmentCreated(view: View, savedInstanceState: Bundle?) {
         // 从数据库加载 URL
@@ -164,11 +179,21 @@ class GsvSettingDialog : BaseDialogFragment(R.layout.dialog_gsv_setting) {
     private fun loadToneVoicesFromDatabase() {
         lifecycleScope.launch {
             val hasHistory = ToneVoiceManager.hasHistoryData()
+            AppLog.put("GsvSettingDialog loadToneVoicesFromDatabase: 是否有历史数据 = $hasHistory")
             if (hasHistory) {
                 // 有历史数据，从数据库加载
                 toneVoices = ToneVoiceManager.getToneVoices()
                 selectedTone = ToneVoiceManager.getSelectedTone()
+                AppLog.put("GsvSettingDialog loadToneVoicesFromDatabase: 加载的音色数量 = ${toneVoices.size}, 选中音色 = ${selectedTone?.getDisplayText()}")
                 toastOnUi("已加载历史音色数据")
+                
+                // 确保选中状态正确设置
+                if (selectedTone == null && toneVoices.isNotEmpty()) {
+                    selectedTone = toneVoices.first()
+                    AppLog.put("GsvSettingDialog loadToneVoicesFromDatabase: 没有选中音色，默认选择第一个 = ${selectedTone?.getDisplayText()}")
+                    // 保存默认选中的音色到数据库
+                    ToneVoiceManager.setSelectedTone(selectedTone!!)
+                }
             } else {
                 // 没有历史数据，显示为空
                 toneVoices = emptyList()
@@ -198,15 +223,13 @@ class GsvSettingDialog : BaseDialogFragment(R.layout.dialog_gsv_setting) {
                 
                 // 更新本地数据
                 toneVoices = newToneVoices
-                selectedTone = newToneVoices.firstOrNull()
+                // 尝试保持之前选中的音色，如果不存在则选择第一个
+                selectedTone = selectedTone?.let { currentSelected ->
+                    newToneVoices.find { it.getUniqueKey() == currentSelected.getUniqueKey() }
+                } ?: newToneVoices.firstOrNull()
                 
                 // 更新UI
-                val displayData = convertToDisplayData(newToneVoices)
-                if (::toneListAdapter.isInitialized) {
-                    toneListAdapter.setData(displayData)
-                } else {
-                    setupToneList()
-                }
+                setupToneList()
                 
                 toastOnUi("数据刷新完成，已保存到数据库")
                 
@@ -227,37 +250,49 @@ class GsvSettingDialog : BaseDialogFragment(R.layout.dialog_gsv_setting) {
      */
     private fun setupToneList() {
         val displayData = convertToDisplayData(toneVoices)
-        toneListAdapter = ToneListAdapter(displayData, selectedTone?.getUniqueKey() ?: "") { selectedToneVoice ->
-            // 点击回调，更新选中的音色
-            selectedTone = selectedToneVoice
-            
-            // 保存选中状态到数据库并发起网络请求切换音色
-            lifecycleScope.launch {
-                try {
-                    // 先保存到本地数据库
-                    ToneVoiceManager.setSelectedTone(selectedToneVoice)
-                    
-                    // 发起网络请求切换音色
-                    val success = ToneVoiceManager.switchToneVoice(selectedToneVoice, selectedToneVoice.role)
-                    if (success) {
-                        toastOnUi("音色切换成功: ${selectedToneVoice.getDisplayText()}")
-                    } else {
-                        toastOnUi("音色切换失败，但已保存到本地")
+        // 使用音色的getUniqueKey()，因为id可能重复
+        val selectedKey = selectedTone?.getUniqueKey() ?: ""
+        AppLog.put("GsvSettingDialog setupToneList: 设置音色列表，选中Key = $selectedKey, 适配器已初始化 = ${::toneListAdapter.isInitialized}")
+        
+        if (::toneListAdapter.isInitialized) {
+            // 如果适配器已经初始化，更新数据和选中状态
+            toneListAdapter.setData(displayData)
+            toneListAdapter.updateSelectedTone(selectedKey)
+        } else {
+            // 首次初始化适配器
+            AppLog.put("GsvSettingDialog setupToneList: 首次初始化适配器，选中Key = $selectedKey")
+            toneListAdapter = ToneListAdapter(displayData, selectedKey) { selectedToneVoice ->
+                // 点击回调，更新选中的音色
+                selectedTone = selectedToneVoice
+                
+                // 保存选中状态到数据库并发起网络请求切换音色
+                lifecycleScope.launch {
+                    try {
+                        // 先保存到本地数据库
+                        ToneVoiceManager.setSelectedTone(selectedToneVoice)
+                        
+                        // 发起网络请求切换音色
+                        val success = ToneVoiceManager.switchToneVoice(selectedToneVoice, selectedToneVoice.role)
+                        if (success) {
+                            toastOnUi("音色切换成功: ${selectedToneVoice.getDisplayText()}")
+                        } else {
+                            toastOnUi("音色切换失败，但已保存到本地")
+                        }
+                        
+                        // 添加与SpeakEngineDialog中tvOk事件相同的非UI逻辑，但ttsEngine归零
+                        ReadBook.book?.setTtsEngine(null)
+                        AppConfig.ttsEngine = null  // ttsEngine归零
+                        ReadAloud.upReadAloudClass()
+                    } catch (e: Exception) {
+                        AppLog.put("音色切换失败: ${e.message}", e)
+                        toastOnUi("音色切换失败: ${e.message}")
                     }
-                    
-                    // 添加与SpeakEngineDialog中tvOk事件相同的非UI逻辑，但ttsEngine归零
-                    ReadBook.book?.setTtsEngine(null)
-                    AppConfig.ttsEngine = null  // ttsEngine归零
-                    ReadAloud.upReadAloudClass()
-                } catch (e: Exception) {
-                    AppLog.put("音色切换失败: ${e.message}", e)
-                    toastOnUi("音色切换失败: ${e.message}")
                 }
             }
-        }
-        binding.rvTones.apply {
-            layoutManager = LinearLayoutManager(requireContext())
-            adapter = toneListAdapter
+            binding.rvTones.apply {
+                layoutManager = LinearLayoutManager(requireContext())
+                adapter = toneListAdapter
+            }
         }
     }
 
@@ -294,6 +329,7 @@ class GsvSettingDialog : BaseDialogFragment(R.layout.dialog_gsv_setting) {
         }
 
         fun updateSelectedTone(newSelectedKey: String) {
+            AppLog.put("ToneListAdapter updateSelectedTone: 旧选中=${selectedToneKey}, 新选中=${newSelectedKey}")
             selectedToneKey = newSelectedKey
             notifyDataSetChanged()
         }
@@ -385,13 +421,18 @@ class GsvSettingDialog : BaseDialogFragment(R.layout.dialog_gsv_setting) {
                     
                     // 为每个音色项设置点击监听器，直接传递当前的 ToneVoice 对象
                     holder.itemView.setOnClickListener {
-                        selectedToneKey = toneVoice.getUniqueKey()
+                        selectedToneKey = toneVoice.getUniqueKey()  // 使用getUniqueKey()因为id可能重复
                         onToneSelected(toneVoice)
+                        // 每次点击都更新UI状态，确保重复选中也能正常工作
                         notifyDataSetChanged()
                     }
                     
-                    // 根据是否选中来设置选中状态（使用 uniqueKey 进行比较）
-                    holder.itemView.isSelected = toneVoice.getUniqueKey() == selectedToneKey
+                    // 根据是否选中来设置选中状态（使用 getUniqueKey 进行比较）
+                    val isSelected = toneVoice.getUniqueKey() == selectedToneKey
+                    holder.itemView.isSelected = isSelected
+                    if (isSelected) {
+                        AppLog.put("ToneListAdapter onBindViewHolder: 设置选中状态 - ${toneVoice.getDisplayText()}")
+                    }
                 }
             }
         }

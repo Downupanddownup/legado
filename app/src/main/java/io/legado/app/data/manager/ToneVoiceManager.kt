@@ -76,7 +76,7 @@ object ToneVoiceManager {
             // 如果没有配置但要设置音色，创建新配置
             val newConfig = ToneVoiceEntity(
                 toneVoices = listOf(toneVoice),
-                selectedToneId = toneVoice.id
+                selectedToneId = toneVoice.getUniqueKey()
             )
             appDb.toneVoiceDao.insertOrUpdate(newConfig)
         }
@@ -92,7 +92,7 @@ object ToneVoiceManager {
         } else {
             ToneVoiceEntity(
                 toneVoices = toneVoices,
-                selectedToneId = selectedTone?.id
+                selectedToneId = selectedTone?.getUniqueKey()
             )
         }
         appDb.toneVoiceDao.insertOrUpdate(updatedConfig)
