@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- 选中状态：墨水屏模式下使用边框表示选中 -->
+    <item android:state_selected="true">
+        <shape>
+            <solid android:color="@color/white" />
+            <stroke
+                android:width="2dp"
+                android:color="@color/divider" />
+            <corners android:radius="4dp" />
+        </shape>
+    </item>
+    <!-- 默认状态：透明背景 -->
+    <item>
+        <shape>
+            <solid android:color="@android:color/transparent" />
+            <corners android:radius="4dp" />
+        </shape>
+    </item>
+</selector>

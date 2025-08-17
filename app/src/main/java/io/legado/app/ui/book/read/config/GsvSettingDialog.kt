@@ -19,9 +19,11 @@ import io.legado.app.utils.GsvConfigManager
 import io.legado.app.utils.viewbindingdelegate.viewBinding
 import io.legado.app.utils.toastOnUi
 import io.legado.app.help.config.AppConfig
+import io.legado.app.help.config.ThemeConfig
 import io.legado.app.constant.AppLog
 import io.legado.app.model.ReadAloud
 import io.legado.app.model.ReadBook
+import io.legado.app.lib.theme.primaryTextColor
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -312,6 +314,13 @@ class GsvSettingDialog : BaseDialogFragment(R.layout.dialog_gsv_setting) {
                         setPadding(16, 24, 16, 8)
                         textSize = 16f
                         setTypeface(null, android.graphics.Typeface.BOLD)
+                        // 根据主题设置正确的文本颜色
+                        val textColor = if (ThemeConfig.isDarkTheme()) {
+                            context.getColor(R.color.md_dark_primary_text) // 暗色主题用白色文本
+                        } else {
+                            context.getColor(R.color.md_light_primary_text) // 亮色主题用黑色文本
+                        }
+                        setTextColor(textColor)
                     }
                     object : RecyclerView.ViewHolder(textView) {}
                 }
@@ -320,6 +329,27 @@ class GsvSettingDialog : BaseDialogFragment(R.layout.dialog_gsv_setting) {
                     val textView = TextView(parent.context).apply {
                         setPadding(32, 16, 16, 16)
                         textSize = 14f
+                        // 设置布局参数，确保填满宽度
+                        layoutParams = ViewGroup.LayoutParams(
+                            ViewGroup.LayoutParams.MATCH_PARENT,
+                            ViewGroup.LayoutParams.WRAP_CONTENT
+                        )
+                        // 根据主题设置正确的文本颜色
+                        val textColor = if (ThemeConfig.isDarkTheme()) {
+                            context.getColor(R.color.md_light_primary_text)
+                        } else {
+                            context.getColor(R.color.md_dark_primary_text)
+                        }
+                        setTextColor(textColor)
+                        // 根据主题模式选择合适的背景
+                        if (AppConfig.isEInkMode) {
+                            setBackgroundResource(R.drawable.selector_tone_item_eink_bg)
+                        } else {
+                            setBackgroundResource(R.drawable.selector_tone_item_bg)
+                        }
+                        // 设置可选中状态
+                        isClickable = true
+                        isFocusable = true
                     }
                     object : RecyclerView.ViewHolder(textView) {}
                 }
@@ -330,11 +360,28 @@ class GsvSettingDialog : BaseDialogFragment(R.layout.dialog_gsv_setting) {
             val item = flatList[position]
             when (getItemViewType(position)) {
                 VIEW_TYPE_CATEGORY -> {
-                    (holder.itemView as TextView).text = item as String
+                    val textView = holder.itemView as TextView
+                    textView.text = item as String
+                    // 根据主题设置正确的文本颜色
+                    val textColor = if (ThemeConfig.isDarkTheme()) {
+                        holder.itemView.context.getColor(R.color.md_dark_primary_text) // 暗色主题用白色文本
+                    } else {
+                        holder.itemView.context.getColor(R.color.md_light_primary_text) // 亮色主题用黑色文本
+                    }
+                    textView.setTextColor(textColor)
                 }
                 VIEW_TYPE_TONE -> {
                     val toneVoice = item as ToneVoice
-                    (holder.itemView as TextView).text = toneVoice.getDisplayText()
+                    val textView = holder.itemView as TextView
+                    textView.text = toneVoice.getDisplayText()
+                    
+                    // 根据主题设置正确的文本颜色
+                    val textColor = if (ThemeConfig.isDarkTheme()) {
+                        holder.itemView.context.getColor(R.color.md_dark_primary_text) // 暗色主题用白色文本
+                    } else {
+                        holder.itemView.context.getColor(R.color.md_light_primary_text) // 亮色主题用黑色文本
+                    }
+                    textView.setTextColor(textColor)
                     
                     // 为每个音色项设置点击监听器，直接传递当前的 ToneVoice 对象
                     holder.itemView.setOnClickListener {
@@ -343,12 +390,8 @@ class GsvSettingDialog : BaseDialogFragment(R.layout.dialog_gsv_setting) {
                         notifyDataSetChanged()
                     }
                     
-                    // 根据是否选中来设置背景或颜色（使用 uniqueKey 进行比较）
-                    if (toneVoice.getUniqueKey() == selectedToneKey) {
-                        holder.itemView.setBackgroundResource(android.R.color.holo_blue_light)
-                    } else {
-                        holder.itemView.setBackgroundResource(android.R.color.transparent)
-                    }
+                    // 根据是否选中来设置选中状态（使用 uniqueKey 进行比较）
+                    holder.itemView.isSelected = toneVoice.getUniqueKey() == selectedToneKey
                 }
             }
         }
