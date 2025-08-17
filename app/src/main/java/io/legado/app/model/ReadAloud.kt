@@ -6,11 +6,12 @@ import android.os.Bundle
 import io.legado.app.constant.AppLog
 import io.legado.app.constant.EventBus
 import io.legado.app.constant.IntentAction
+import io.legado.app.constant.PreferKey
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.HttpTTS
 import io.legado.app.help.config.AppConfig
+import io.legado.app.utils.putPrefBoolean
 import io.legado.app.service.BaseReadAloudService
-import io.legado.app.service.GsvTTSReadAloudService
 import io.legado.app.service.HttpReadAloudService
 import io.legado.app.service.TTSReadAloudService
 import io.legado.app.utils.LogUtils
@@ -18,6 +19,8 @@ import io.legado.app.utils.StringUtils
 import io.legado.app.utils.postEvent
 import io.legado.app.utils.startForegroundServiceCompat
 import io.legado.app.utils.toastOnUi
+import io.legado.app.data.manager.ToneVoiceManager
+import kotlinx.coroutines.runBlocking
 import splitties.init.appCtx
 
 object ReadAloud {
@@ -26,13 +29,21 @@ object ReadAloud {
     var httpTTS: HttpTTS? = null
 
     private fun getReadAloudClass(): Class<*> {
-        AppConfig.useGsvTTS = false
         // GSV TTS 开关控制
         val useGsvTTS = AppConfig.useGsvTTS
         if (useGsvTTS) {
-            return GsvTTSReadAloudService::class.java
+            // 使用ToneVoiceManager创建httpTTS对象实例
+            try {
+                httpTTS = runBlocking { ToneVoiceManager.createHttpTTSInstance() }
+                // 打印httpTTS的JSON结构
+                val httpTTSJson = io.legado.app.utils.GSON.toJson(httpTTS)
+                AppLog.put("GSV模式 - httpTTS结构(JSON格式): $httpTTSJson")
+            } catch (e: Exception) {
+                AppLog.put("创建GSV httpTTS实例失败: ${e.message}", e)
+            }
+            return HttpReadAloudService::class.java
         }
-        
+
         // 原始逻辑
         val ttsEngine = ttsEngine
         if (ttsEngine.isNullOrBlank()) {
@@ -41,6 +52,13 @@ object ReadAloud {
         if (StringUtils.isNumeric(ttsEngine)) {
             httpTTS = appDb.httpTTSDao.get(ttsEngine.toLong())
             if (httpTTS != null) {
+                // 打印httpTTS的JSON结构
+                try {
+                    val httpTTSJson = io.legado.app.utils.GSON.toJson(httpTTS)
+                    AppLog.put("httpTTS结构(JSON格式): $httpTTSJson")
+                } catch (e: Exception) {
+                    AppLog.put("打印httpTTS JSON失败: ${e.message}", e)
+                }
                 return HttpReadAloudService::class.java
             }
         }

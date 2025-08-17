@@ -10,6 +10,7 @@ import io.legado.app.help.http.newCallStrResponse
 import io.legado.app.help.http.newCallResponse
 import io.legado.app.help.http.get
 import android.content.Intent
+import io.legado.app.constant.AppLog
 import io.legado.app.constant.IntentAction
 import io.legado.app.model.ReadAloud
 import io.legado.app.service.BaseReadAloudService
@@ -19,6 +20,7 @@ import splitties.init.appCtx
 import okhttp3.Response
 import io.legado.app.utils.GSON
 import io.legado.app.utils.GsvConfigManager
+import io.legado.app.data.entities.HttpTTS
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlin.random.Random
@@ -209,6 +211,7 @@ object ToneVoiceManager {
             if (!roleName.isNullOrBlank()) {
                 queryMap["role_name"] = roleName
             }
+            queryMap["stream_mode_type"] = if (AppConfig.streamReadAloudAudio) "1" else "0"
             
             // 发起网络请求
             val response = okHttpClient.newCallResponse {
@@ -225,7 +228,9 @@ object ToneVoiceManager {
             
             // 检查响应内容
             val responseBody = response.body?.string() ?: ""
-            if (responseBody.trim() == "ok") {
+            AppLog.put("ToneVoiceManager"+ "音色切换响应: '$responseBody'+ 长度: ${responseBody.length}+ trim后: '${responseBody.trim()}'")
+            val trimmedResponse = responseBody.trim().lowercase()
+            if (trimmedResponse == "ok" || trimmedResponse.contains("ok")) {
                 // 音色切换成功后，清空GsvTTSReadAloudService的缓存
                 if (AppConfig.useGsvTTS && BaseReadAloudService.isRun) {
                     val intent = Intent(appCtx, GsvTTSReadAloudService::class.java)
@@ -234,7 +239,8 @@ object ToneVoiceManager {
                 }
                 return true
             } else {
-                throw Exception("服务器返回错误: $responseBody")
+                AppLog.put("ToneVoiceManager音色切换失败，响应不包含ok: '$responseBody'")
+                throw Exception("服务器返回错误: '$responseBody' (期望包含'ok')")
             }
             
         } catch (e: Exception) {
@@ -271,11 +277,16 @@ object ToneVoiceManager {
         try {
             // 获取配置的 URL
             val baseUrl = GsvConfigManager.getGsvUrl()
+            AppLog.put("ToneVoiceManager获取到的baseUrl: $baseUrl")
+            
             if (baseUrl.isNullOrBlank()) {
                 throw Exception("GSV URL 未配置")
             }
             
             val apiUrl = "$baseUrl/product/get_all_databases_finished_product_list"
+            
+            // 调试日志：打印构建的API URL
+            AppLog.put("ToneVoiceManager构建的API URL: $apiUrl")
             
             // 发起网络请求，增加重试次数
             val response = okHttpClient.newCallStrResponse(retry = 2) {
@@ -350,5 +361,23 @@ object ToneVoiceManager {
             saveToneVoices(mockToneVoices, mockToneVoices.firstOrNull())
             throw e // 重新抛出异常，让调用方知道网络请求失败了
         }
+    }
+    
+    /**
+     * 创建httpTTS对象实例
+     * 根据用户提供的JSON结构创建HttpTTS对象，并将url中的协议、IP和端口替换为getTtsRequestUrl的返回值
+     */
+    suspend fun createHttpTTSInstance(): HttpTTS {
+        val ttsRequestUrl = getTtsRequestUrl()
+        
+        // 构建完整的TTS URL，包含请求参数
+        val fullUrl = "$ttsRequestUrl?text={{java.encodeURI(speakText)}}&text_language=zh&timestamp=${System.currentTimeMillis()},{\n" +
+                "     \"method\": \"GET\"\n" +
+                "}\n"
+        
+        return HttpTTS(
+            name = "gsv",
+            url = fullUrl,
+        )
     }
 }

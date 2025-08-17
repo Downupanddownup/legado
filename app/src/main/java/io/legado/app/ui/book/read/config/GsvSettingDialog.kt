@@ -20,6 +20,8 @@ import io.legado.app.utils.viewbindingdelegate.viewBinding
 import io.legado.app.utils.toastOnUi
 import io.legado.app.help.config.AppConfig
 import io.legado.app.constant.AppLog
+import io.legado.app.model.ReadAloud
+import io.legado.app.model.ReadBook
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -240,6 +242,11 @@ class GsvSettingDialog : BaseDialogFragment(R.layout.dialog_gsv_setting) {
                     } else {
                         toastOnUi("音色切换失败，但已保存到本地")
                     }
+                    
+                    // 添加与SpeakEngineDialog中tvOk事件相同的非UI逻辑，但ttsEngine归零
+                    ReadBook.book?.setTtsEngine(null)
+                    AppConfig.ttsEngine = null  // ttsEngine归零
+                    ReadAloud.upReadAloudClass()
                 } catch (e: Exception) {
                     AppLog.put("音色切换失败: ${e.message}", e)
                     toastOnUi("音色切换失败: ${e.message}")
