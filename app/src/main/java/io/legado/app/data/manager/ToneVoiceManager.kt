@@ -23,6 +23,8 @@ import io.legado.app.utils.GsvConfigManager
 import io.legado.app.data.entities.HttpTTS
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlin.random.Random
 
 /**
@@ -195,56 +197,58 @@ object ToneVoiceManager {
      * @return 是否设置成功
      */
     suspend fun switchToneVoice(toneVoice: ToneVoice, roleName: String? = null): Boolean {
-        try {
-            // 获取基础请求地址
-            val baseUrl = getBaseRequestUrl()
-            if (baseUrl.isBlank()) {
-                throw Exception("TTS 服务地址未配置")
-            }
-            
-            // 构建请求URL
-            val apiUrl = "$baseUrl/set_product"
-            
-            // 构建查询参数
-            val queryMap = mutableMapOf<String, String>()
-            queryMap["product_id"] = toneVoice.id
-            if (!roleName.isNullOrBlank()) {
-                queryMap["role_name"] = roleName
-            }
-            queryMap["stream_mode_type"] = if (AppConfig.streamReadAloudAudio) "1" else "0"
-            
-            // 发起网络请求
-            val response = okHttpClient.newCallResponse {
-                get(apiUrl, queryMap)
-                // 添加请求头
-                addHeader("Connection", "close")
-                addHeader("Cache-Control", "no-cache")
-            }
-            
-            // 检查响应是否成功
-            if (!response.isSuccessful) {
-                throw Exception("切换音色失败: HTTP ${response.code} - ${response.message}")
-            }
-            
-            // 检查响应内容
-            val responseBody = response.body?.string() ?: ""
-            AppLog.put("ToneVoiceManager"+ "音色切换响应: '$responseBody'+ 长度: ${responseBody.length}+ trim后: '${responseBody.trim()}'")
-            val trimmedResponse = responseBody.trim().lowercase()
-            if (trimmedResponse == "ok" || trimmedResponse.contains("ok")) {
-                // 音色切换成功后，清空GsvTTSReadAloudService的缓存
-                if (AppConfig.useGsvTTS && BaseReadAloudService.isRun) {
-                    val intent = Intent(appCtx, GsvTTSReadAloudService::class.java)
-                    intent.action = IntentAction.clearCache
-                    appCtx.startForegroundServiceCompat(intent)
+        return withContext(Dispatchers.IO) {
+            try {
+                // 获取基础请求地址
+                val baseUrl = getBaseRequestUrl()
+                if (baseUrl.isBlank()) {
+                    throw Exception("TTS 服务地址未配置")
                 }
-                return true
-            } else {
-                AppLog.put("ToneVoiceManager音色切换失败，响应不包含ok: '$responseBody'")
-                throw Exception("服务器返回错误: '$responseBody' (期望包含'ok')")
+                
+                // 构建请求URL
+                val apiUrl = "$baseUrl/set_product"
+                
+                // 构建查询参数
+                val queryMap = mutableMapOf<String, String>()
+                queryMap["product_id"] = toneVoice.id
+                if (!roleName.isNullOrBlank()) {
+                    queryMap["role_name"] = roleName
+                }
+                queryMap["stream_mode_type"] = if (AppConfig.streamReadAloudAudio) "1" else "0"
+                
+                // 发起网络请求
+                val response = okHttpClient.newCallResponse {
+                    get(apiUrl, queryMap)
+                    // 添加请求头
+                    addHeader("Connection", "close")
+                    addHeader("Cache-Control", "no-cache")
+                }
+                
+                // 检查响应是否成功
+                if (!response.isSuccessful) {
+                    throw Exception("切换音色失败: HTTP ${response.code} - ${response.message}")
+                }
+                
+                // 检查响应内容
+                val responseBody = response.body?.string() ?: ""
+                AppLog.put("ToneVoiceManager"+ "音色切换响应: '$responseBody'+ 长度: ${responseBody.length}+ trim后: '${responseBody.trim()}'")
+                val trimmedResponse = responseBody.trim().lowercase()
+                if (trimmedResponse == "ok" || trimmedResponse.contains("ok")) {
+                    // 音色切换成功后，清空GsvTTSReadAloudService的缓存
+                    if (AppConfig.useGsvTTS && BaseReadAloudService.isRun) {
+                        val intent = Intent(appCtx, GsvTTSReadAloudService::class.java)
+                        intent.action = IntentAction.clearCache
+                        appCtx.startForegroundServiceCompat(intent)
+                    }
+                    return@withContext true
+                } else {
+                    AppLog.put("ToneVoiceManager音色切换失败，响应不包含ok: '$responseBody'")
+                    throw Exception("服务器返回错误: '$responseBody' (期望包含'ok')")
+                }
+                
+            } catch (e: Exception) {
+                throw Exception("切换音色失败: ${e.message}", e)
             }
-            
-        } catch (e: Exception) {
-            throw Exception("切换音色失败: ${e.message}")
         }
     }
     
